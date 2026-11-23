@@ -1,6 +1,6 @@
-# IMAP Mail MCP
+# Email MCP
 
-**Private-by-design mail tools for AI agents — Gmail and any other IMAP mailbox.**
+*Gmail & IMAP tools for AI assistants.*
 
 A minimal, local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that lets compatible AI clients browse folders, list, search and read mail, and save drafts. It connects directly to your configured IMAP providers over TLS. **No SMTP, no send tool, no delete tool.**
 
@@ -32,8 +32,8 @@ A minimal, local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP
 ## Install
 
 ```bash
-git clone https://github.com/charlie-seul/imap-mail-mcp.git
-cd imap-mail-mcp
+git clone https://github.com/charlie-seul/email-mcp.git
+cd email-mcp
 ./setup.sh
 ```
 
@@ -73,11 +73,11 @@ Add a **stdio** MCP with the following values (replace `/absolute/path`):
 
 | Field | Value |
 | --- | --- |
-| Name | `imap-mail` |
+| Name | `email-mcp` |
 | Transport | `stdio` |
-| Command | `/absolute/path/imap-mail-mcp/.venv/bin/python` |
-| Arguments | `/absolute/path/imap-mail-mcp/server.py` |
-| Working directory (if requested) | `/absolute/path/imap-mail-mcp` |
+| Command | `/absolute/path/email-mcp/.venv/bin/python` |
+| Arguments | `/absolute/path/email-mcp/server.py` |
+| Working directory (if requested) | `/absolute/path/email-mcp` |
 
 For Windows, use `.venv\\Scripts\\python.exe` instead. This is **not** a long-running HTTP service: the MCP client starts the stdio process when connected and normally closes it on disconnect. IMAP connections are opened only for actual operations.
 
@@ -92,9 +92,9 @@ Generic MCP configuration (replace the placeholder paths):
 ```json
 {
   "mcpServers": {
-    "imap-mail": {
-      "command": "/absolute/path/imap-mail-mcp/.venv/bin/python",
-      "args": ["/absolute/path/imap-mail-mcp/server.py"]
+    "email-mcp": {
+      "command": "/absolute/path/email-mcp/.venv/bin/python",
+      "args": ["/absolute/path/email-mcp/server.py"]
     }
   }
 }
@@ -122,7 +122,7 @@ Tests do not connect to a mailbox, send messages or use personal credentials.
 ## Project structure
 
 ```text
-imap-mail-mcp/
+email-mcp/
 ├── server.py           # MCP tools and account configuration
 ├── imap_client.py      # IMAP protocol operations
 ├── requirements.txt
