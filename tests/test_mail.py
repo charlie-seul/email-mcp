@@ -101,6 +101,55 @@ class MailTests(unittest.TestCase):
                 server.account('unknown')
 
 
+class AccountTests(unittest.TestCase):
+    def test_many_accounts_and_multiple_gmail(self):
+        aliases = ['personal', 'studio', 'archive'] + [f'account_{i}' for i in range(20)]
+        env = {'MAIL_ACCOUNTS': ','.join(aliases)}
+        for alias in aliases:
+            prefix = alias.upper()
+            env.update({f'{prefix}_IMAP_HOST': 'imap.gmail.com' if alias in ('personal', 'studio') else 'imap.example.org',
+                        f'{prefix}_USER': f'{alias}@example.org', f'{prefix}_PASSWORD': f'synthetic-{alias}'})
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(server.mail_list_accounts(), aliases)
+            self.assertEqual(server.account(' PERSONAL ').password, 'synthetic-personal')
+            self.assertEqual(server.account('studio').host, 'imap.gmail.com')
+            self.assertEqual(server.account('archive').host, 'imap.example.org')
+            with self.assertRaises(ValueError):
+                server.account('work')
+
+    def test_invalid_allowlists(self):
+        for value in ('same,SAME', 'valid,,other', 'not-valid', '1name', 'ümlaut', 'name\nother'):
+            with self.subTest(value=value), patch.dict(os.environ, {'MAIL_ACCOUNTS': value}, clear=True):
+                with self.assertRaises(ValueError):
+                    server.mail_list_accounts()
+
+    def test_empty_allowlist_disables_legacy(self):
+        with patch.dict(os.environ, {'MAIL_ACCOUNTS': '', 'GMAIL_USER': 'reader@example.org', 'GMAIL_APP_PASSWORD': 'synthetic'}, clear=True):
+            self.assertEqual(server.mail_list_accounts(), [])
+            with self.assertRaises(ValueError):
+                server.account('gmail')
+
+    def test_invalid_or_incomplete_account_does_not_hide_valid_account(self):
+        env = {'MAIL_ACCOUNTS': 'missing,invalid,valid', 'INVALID_IMAP_HOST': 'imap.example.org',
+               'INVALID_USER': 'reader@example.org', 'INVALID_PASSWORD': 'synthetic',
+               'INVALID_IMAP_PORT': 'bad-port', 'VALID_IMAP_HOST': 'imap.example.org',
+               'VALID_USER': 'reader@example.org', 'VALID_PASSWORD': 'synthetic',
+               'VALID_APP_PASSWORD': 'synthetic-app', 'VALID_DRAFTS_FOLDER': 'Drafts'}
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(server.mail_list_accounts(), ['valid'])
+            self.assertEqual(server.account('valid').password, 'synthetic-app')
+            self.assertEqual(server.account('valid').drafts_folder, 'Drafts')
+            for value in ('0', '65536', 'not-a-port'):
+                with patch.dict(os.environ, {'VALID_IMAP_PORT': value}):
+                    with self.assertRaises(ValueError):
+                        server.account('valid')
+
+    def test_legacy_gmail_host_and_credentials(self):
+        with patch.dict(os.environ, {'GMAIL_USER': 'reader@example.org', 'GMAIL_APP_PASSWORD': 'synthetic'}, clear=True):
+            self.assertEqual(server.mail_list_accounts(), ['gmail'])
+            self.assertEqual(server.account('gmail').host, 'imap.gmail.com')
+
+
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_stdio_handshake_and_tools(self):
         from mcp import ClientSession, StdioServerParameters

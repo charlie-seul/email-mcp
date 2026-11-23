@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,16 +24,38 @@ mcp = FastMCP(
 )
 
 
+def account_aliases() -> list[str]:
+    """Read an explicit account allowlist; preserve legacy aliases when unset."""
+    raw = os.getenv('MAIL_ACCOUNTS')
+    if raw is None:
+        return ['gmail', 'work']
+    if not raw.strip():
+        return []
+    aliases = [value.strip().lower() for value in raw.split(',')]
+    if any(not re.fullmatch(r'[a-z][a-z0-9_]*', value, flags=re.ASCII) for value in aliases):
+        raise ValueError('MAIL_ACCOUNTS must contain comma-separated aliases using letters, digits and underscores, starting with a letter')
+    if len(aliases) != len(set(aliases)):
+        raise ValueError('MAIL_ACCOUNTS contains duplicate aliases')
+    return aliases
+
+
 def account(name: str) -> MailAccount:
-    prefix = name.upper().strip()
-    if prefix not in ('GMAIL', 'WORK'):
-        raise ValueError('Account must be gmail or work')
-    host = os.getenv(f'{prefix}_IMAP_HOST', 'imap.gmail.com' if prefix == 'GMAIL' else '')
+    alias = name.strip().lower()
+    if alias not in account_aliases():
+        raise ValueError('Unknown account; use mail_list_accounts to discover configured aliases')
+    prefix = alias.upper()
+    host = os.getenv(f'{prefix}_IMAP_HOST', 'imap.gmail.com' if alias == 'gmail' else '')
     username = os.getenv(f'{prefix}_USER', '')
-    password = os.getenv(f'{prefix}_APP_PASSWORD' if prefix == 'GMAIL' else f'{prefix}_PASSWORD', '')
+    password = os.getenv(f'{prefix}_APP_PASSWORD') or os.getenv(f'{prefix}_PASSWORD', '')
     if not all((host, username, password)):
         raise RuntimeError(f'Missing {prefix} IMAP configuration. Edit local .env (never commit it).')
-    return MailAccount(host, int(os.getenv(f'{prefix}_IMAP_PORT', '993')), username, password,
+    try:
+        port = int(os.getenv(f'{prefix}_IMAP_PORT', '993'))
+        if not 1 <= port <= 65535:
+            raise ValueError
+    except ValueError:
+        raise ValueError(f'Invalid {prefix}_IMAP_PORT; expected an integer between 1 and 65535') from None
+    return MailAccount(host, port, username, password,
                        os.getenv(f'{prefix}_DRAFTS_FOLDER') or None)
 
 
@@ -40,7 +63,7 @@ def account(name: str) -> MailAccount:
 def mail_list_accounts() -> list[str]:
     """Return account aliases that have complete local configuration, never credentials."""
     result = []
-    for name in ('gmail', 'work'):
+    for name in account_aliases():
         try:
             account(name)
             result.append(name)
@@ -51,7 +74,7 @@ def mail_list_accounts() -> list[str]:
 
 @mcp.tool()
 def mail_list_folders(account_name: str) -> list[str]:
-    """List IMAP folders for an account (gmail or work)."""
+    """List IMAP folders for a configured account alias."""
     return list_folders(account(account_name))
 
 

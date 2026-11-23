@@ -17,7 +17,7 @@ A minimal, local [Model Context Protocol](https://modelcontextprotocol.io/) (MCP
 | `mail_read` | Read plain-text content and attachment filenames | No (`BODY.PEEK`) |
 | `mail_create_draft` | Save a draft to the account's Drafts folder | **Yes** |
 
-- Supports **Gmail** plus a second generic IMAP account named **work** (e.g. another Gmail account, a school, or a custom domain).
+- Supports any number of configured accounts, including multiple **Gmail** accounts and other TLS IMAP providers, each with its own alias and credentials.
 - Uses `UID` and `UIDVALIDITY` to avoid accidentally retrieving a different message after mailbox changes.
 - Keeps the LLM context smaller by limiting returned message bodies to 40,000 characters.
 - Reads messages without setting the IMAP `\\Seen` flag. Drafts are saved through IMAP `APPEND` and should synchronize with compatible clients such as Apple Mail.
@@ -42,18 +42,28 @@ The installer creates `.venv` and a private `.env` file from `.env.example` when
 Edit `.env` locally:
 
 ```dotenv
-GMAIL_IMAP_HOST=imap.gmail.com
-GMAIL_IMAP_PORT=993
-GMAIL_USER=your-address@gmail.com
-GMAIL_APP_PASSWORD=your-google-app-password
+MAIL_ACCOUNTS=personal,studio,archive
 
-WORK_IMAP_HOST=imap.example.org
-WORK_IMAP_PORT=993
-WORK_USER=you@example.org
-WORK_PASSWORD=your-imap-password
+PERSONAL_IMAP_HOST=imap.gmail.com
+PERSONAL_USER=you@example.org
+PERSONAL_APP_PASSWORD=replace-locally
+
+STUDIO_IMAP_HOST=imap.gmail.com
+STUDIO_USER=studio@example.org
+STUDIO_APP_PASSWORD=replace-locally
+
+ARCHIVE_IMAP_HOST=imap.example.org
+ARCHIVE_USER=archive@example.org
+ARCHIVE_PASSWORD=replace-locally
 ```
 
-Leave unused accounts blank. Optionally set `GMAIL_DRAFTS_FOLDER` or `WORK_DRAFTS_FOLDER` if your server does not advertise the IMAP `\\Drafts` special-use folder.
+There is no fixed account-count limit. Add an alias to `MAIL_ACCOUNTS` and define its uppercase `<ALIAS>_IMAP_HOST`, `<ALIAS>_USER` and `<ALIAS>_PASSWORD` (or `<ALIAS>_APP_PASSWORD`). Each Gmail account needs its own app password. If both password variables are set, `APP_PASSWORD` takes precedence.
+
+Aliases are case-insensitive, start with a letter and contain only ASCII letters, digits or underscores. Duplicate or malformed aliases are rejected. Port defaults to 993; optionally set `<ALIAS>_IMAP_PORT` and `<ALIAS>_DRAFTS_FOLDER`. Set the drafts folder if the provider does not advertise `\\Drafts`.
+
+`mail_list_accounts` returns only aliases with complete, valid configuration, without credentials. An incomplete account does not prevent using the others. Only aliases listed in `MAIL_ACCOUNTS` can be used. Connections open on demand, not for every configured account at startup. Restart the MCP process after editing `.env`.
+
+**Existing installations:** when `MAIL_ACCOUNTS` is absent, the original `gmail` / `work` variables keep working. An explicitly empty `MAIL_ACCOUNTS=` disables all accounts. If migrating, list every alias you want to retain, including `gmail` and `work` when applicable. Only the legacy `gmail` alias defaults its host to `imap.gmail.com`; other aliases require an explicit host.
 
 **Never commit `.env`.** Prefer a local folder that is not cloud-synced for secret configuration. Avoid putting credentials in client command-line arguments.
 
@@ -73,9 +83,9 @@ For Windows, use `.venv\\Scripts\\python.exe` instead. This is **not** a long-ru
 
 Try asking your agent:
 
-> List the five newest emails from my `gmail` account. Show sender, subject and date. Do not change messages or create drafts.
+> List the five newest emails from my `personal` account. Show sender, subject and date. Do not change messages or create drafts.
 
-> Search my `work` account for correspondence about a project, and propose a reply. Do not create a draft until I approve the content.
+> Search my `studio` account for correspondence about a project, and propose a reply. Do not create a draft until I approve the content.
 
 Generic MCP configuration (replace the placeholder paths):
 
@@ -124,7 +134,6 @@ imap-mail-mcp/
 
 ## Limitations & roadmap
 
-- Currently two account aliases (`gmail`, `work`); generalizing to an arbitrary number of accounts is a planned improvement.
 - No attachment download, threading, pagination or mailbox modification beyond draft creation.
 - A separate server-side confirmation mechanism for draft creation would improve safety.
 - Verify draft synchronization in your email client before regular use.
